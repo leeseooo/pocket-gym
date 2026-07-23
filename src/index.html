@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Punch Panel</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    background: transparent;   /* 창 모서리 라운드가 보이도록 */
+    font-family: "Menlo", monospace;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+  }
+  #panel {
+    position: relative;
+    width: 100vw; height: 100vh;
+    background: #23232b;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  #panel::before {   /* 은은한 링 조명 */
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(120% 80% at 50% 0%, rgba(255,255,255,.06), transparent 60%);
+    pointer-events: none; z-index: 3;
+  }
+  /* 상단 바 = 드래그 핸들 */
+  #bar {
+    height: 26px; flex: 0 0 26px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 8px 0 12px; z-index: 5;
+    text-shadow: 0 1px 0 rgba(0,0,0,.6);
+  }
+  #combo { font-size: 12px; color: #ffd23f; font-weight: bold; letter-spacing: 1px; }
+  #combo .n { font-size: 16px; }
+  #combo.pop { animation: pop .18s ease-out; }
+  @keyframes pop { 0% { transform: scale(1.5); } 100% { transform: scale(1); } }
+  #right { display: flex; align-items: center; gap: 8px; }
+  #total { font-size: 11px; color: #8a8a99; }
+  #close {
+    width: 16px; height: 16px; border: none; border-radius: 4px;
+    background: rgba(255,255,255,.06); color: #9a9aa2;
+    font-size: 12px; line-height: 1; cursor: pointer; padding: 0;
+  }
+  #close:hover { background: #e23b3b; color: #fff; }
+  /* 펀치 존 */
+  #stage { position: relative; flex: 1 1 auto; cursor: pointer; }
+  canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #hint {
+    position: absolute; bottom: 6px; left: 0; right: 0;
+    text-align: center; font-size: 9px; color: #4a4a54; z-index: 4;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+  <div id="panel">
+    <div id="bar" data-tauri-drag-region>
+      <div id="combo"><span class="n">0</span> COMBO</div>
+      <div id="right">
+        <div id="total">🥊 0</div>
+        <button id="close" title="닫기">×</button>
+      </div>
+    </div>
+    <div id="stage">
+      <canvas id="game"></canvas>
+      <div id="hint">click to punch</div>
+    </div>
+  </div>
+
+<script>
+// ── 버퍼(저해상도)에서 그리고 4배 확대해서 도트 감성 유지 ──
+const W = 96, H = 96, SCALE = 4;
+const view = document.getElementById("game");
+view.width = W * SCALE; view.height = H * SCALE;
+const vctx = view.getContext("2d");
+vctx.imageSmoothingEnabled = false;
+
+const buf = document.createElement("canvas");
+buf.width = W; buf.height = H;
+const ctx = buf.getContext("2d");
+
+// ── 팔레트 ──
+const C = {
+  skin:   "#f0b878", skinD: "#c98a4e",
+  hair:   "#2b2b33",
+  trunk:  "#2e6cf0", trunkD: "#1c47a8",  // 파란 트렁크
+  glove:  "#e23b3b", gloveD: "#a11f1f",  // 빨간 글러브
+  boot:   "#e8e8ec", bootD: "#9a9aa2",
+  bag:    "#e23b3b", bagD: "#a11f1f", bagL: "#f57070", // 빨간 샌드백
+  chain:  "#6a6a76",
+  fx:     "#fff3b0", fxHot: "#ffffff",
+};
+
+// ── 픽셀 사각형 헬퍼 ──
+function px(x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x|0, y|0, w, h);
+}
+
+// ── 상태 ──
+const state = {
+  punch: null,        // {type, t, hit, target}
+  combo: 0,
+  total: 0,
+  lastHit: -9999,
+  shake: 0,
+  bagVel: 0, bagAng: 0,  // 샌드백 흔들림(각도)
+  fx: [],             // 임팩트 이펙트
+  time: 0,
+};
+
+const PUNCHES = ["jab", "straight", "hook", "upper", "kick"];
+
+// 펀치 타입별 파라미터 (지속시간ms, 타격시점, 궤적)
+const PUNCH_DEF = {
+  jab:      { dur: 260, hitAt: .42, reach: 26, ty: 44, arc: "straight", power: .7 },
+  straight: { dur: 340, hitAt: .48, reach: 30, ty: 46, arc: "straight", power: 1.0 },
+  hook:     { dur: 380, hitAt: .50, reach: 24, ty: 42, arc: "hook",     power: 1.1 },
+  upper:    { dur: 360, hitAt: .52, reach: 22, ty: 40, arc: "upper",    power: 1.15 },
+  kick:     { dur: 460, hitAt: .55, reach: 30, ty: 60, arc: "kick",     power: 1.3 },
+};
+
+// ── 입력 ── (펀치는 스테이지 영역에서만, 상단 바는 드래그용)
+document.getElementById("stage").addEventListener("pointerdown", () => {
+  triggerPunch();
+});
+
+// 닫기 버튼 (Tauri 창 닫기)
+document.getElementById("close").addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (window.__TAURI__) window.__TAURI__.window.getCurrentWindow().close();
+});
+
+function triggerPunch() {
+  // 진행 중이어도 새 펀치로 덮어써서 연타감 살림
+  const type = PUNCHES[(Math.random() * PUNCHES.length) | 0];
+  const def = PUNCH_DEF[type];
+  state.punch = { type, t: 0, def };
+  // ★ 카운트는 클릭 즉시 처리 → 광클해도 누락 0
+  onHit(def);
+}
+
+function onHit(def) {
+  state.total++;
+  // 콤보: 마지막 타격 후 1.5초 안이면 유지
+  if (state.time - state.lastHit < 1500) state.combo++;
+  else state.combo = 1;
+  state.lastHit = state.time;
+
+  state.shake = 6 * def.power;
+  state.bagVel += 0.055 * def.power;   // 샌드백 밀림
+  spawnFx(52, def.ty, def.power);
+  playHitSound(def.power, def.arc);
+  updateHud();
+}
+
+function spawnFx(x, y, power) {
+  state.fx.push({ x, y, t: 0, life: 260, power });
+}
+
+// ── HUD ──
+const comboEl = document.getElementById("combo");
+const totalEl = document.getElementById("total");
+function updateHud() {
+  comboEl.innerHTML = `<span class="n">${state.combo}</span> COMBO`;
+  totalEl.textContent = `🥊 ${state.total}`;
+  comboEl.classList.remove("pop"); void comboEl.offsetWidth; comboEl.classList.add("pop");
+}
+
+// ── 사운드 (WebAudio, 짧은 퍽/빡) ──
+let audio;
+function playHitSound(power, arc) {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const now = audio.currentTime;
+    // 저음 thud
+    const osc = audio.createOscillator();
+    const g = audio.createGain();
+    osc.type = "sine";
+    const baseFreq = arc === "kick" ? 90 : arc === "upper" ? 150 : 130;
+    osc.frequency.setValueAtTime(baseFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(50, now + 0.12);
+    g.gain.setValueAtTime(0.001, now);
+    g.gain.exponentialRampToValueAtTime(0.5 * power, now + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    osc.connect(g).connect(audio.destination);
+    osc.start(now); osc.stop(now + 0.18);
+    // 노이즈 '퍽'
+    const dur = 0.08;
+    const nb = audio.createBuffer(1, audio.sampleRate * dur, audio.sampleRate);
+    const d = nb.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const ns = audio.createBufferSource(); ns.buffer = nb;
+    const ng = audio.createGain();
+    ng.gain.setValueAtTime(0.35 * power, now);
+    ng.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    const hp = audio.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 900;
+    ns.connect(hp).connect(ng).connect(audio.destination);
+    ns.start(now); ns.stop(now + dur);
+  } catch (e) {}
+}
+
+// ── 이징 ──
+const easeOut = t => 1 - (1 - t) * (1 - t);
+const easeIn  = t => t * t;
+
+// ── 글러브 궤적 계산: 가드 위치 → 타격점 → 복귀 ──
+function fistPos(p, prog) {
+  const def = p.def;
+  // 가드(주먹 시작) 위치
+  const gx = 34, gy = 40;
+  // 타격점(샌드백 앞)
+  const hx = 34 + def.reach, hy = def.ty;
+  // 진행: 0~hitAt 뻗기, hitAt~1 복귀
+  let ex; // extension 0..1
+  if (prog < def.hitAt) ex = easeOut(prog / def.hitAt);
+  else ex = 1 - easeIn((prog - def.hitAt) / (1 - def.hitAt));
+
+  let x = gx + (hx - gx) * ex;
+  let y = gy + (hy - gy) * ex;
+
+  // 궤적별 곡선 가미
+  if (def.arc === "hook")  x += Math.sin(ex * Math.PI) * 6, y -= Math.sin(ex * Math.PI) * 8;
+  if (def.arc === "upper") y += Math.sin(ex * Math.PI) * 10;  // 아래로 갔다 위로
+  return { x, y, ex };
+}
+
+// ── 복서 그리기 (오른쪽=샌드백 방향을 봄) ──
+function drawBoxer() {
+  const prog = state.punch ? state.punch.t / state.punch.def.dur : 0;
+  const kicking = state.punch && state.punch.def.arc === "kick";
+  // 아이들 호흡 bob
+  const breathe = Math.sin(state.time / 500) * 1;
+  const baseY = 0 + (state.punch ? -Math.sin(prog * Math.PI) * 1.5 : breathe);
+
+  const cx = 22;          // 몸 중심 x
+  const feetY = 82;
+
+  // ── 뒷다리/앞다리 ──
+  if (kicking) {
+    const k = fistKick(state.punch);
+    // 뒤 지지다리
+    px(cx - 4, feetY - 16, 5, 16, C.trunkD);
+    px(cx - 5, feetY - 2, 8, 3, C.bootD);
+    // 앞 발차기 다리 (뻗음)
+    ctx.save();
+    px(cx + 2, 60 + baseY, k.ex * 22, 5, C.skin);       // 정강이
+    px(cx + 2 + k.ex * 22, 58 + baseY + k.ex * 2, 7, 6, C.boot); // 발
+    ctx.restore();
+  } else {
+    px(cx - 4, feetY - 16, 5, 16, C.trunkD);   // 뒷다리
+    px(cx + 2, feetY - 16, 5, 16, C.trunk);    // 앞다리
+    px(cx - 5, feetY - 2, 8, 3, C.bootD);      // 뒷발
+    px(cx + 1, feetY - 2, 8, 3, C.boot);       // 앞발
+  }
+
+  // ── 트렁크 ──
+  px(cx - 5, 52 + baseY, 14, 12, C.trunk);
+  px(cx - 5, 60 + baseY, 14, 3, C.trunkD);
+
+  // ── 몸통 ──
+  px(cx - 4, 38 + baseY, 12, 15, C.skin);
+  px(cx - 4, 38 + baseY, 3, 15, C.skinD);   // 음영
+
+  // ── 뒷팔(가드) ──
+  px(cx + 5, 40 + baseY, 5, 8, C.skin);
+  px(cx + 8, 36 + baseY, 7, 7, C.gloveD);   // 뒤 글러브(턱 옆)
+
+  // ── 머리 ──
+  px(cx - 2, 26 + baseY, 11, 13, C.skin);
+  px(cx - 2, 26 + baseY, 11, 4, C.hair);    // 머리카락
+  px(cx + 6, 32 + baseY, 2, 2, C.skinD);    // 눈
+  px(cx - 2, 32 + baseY, 2, 7, C.skinD);    // 얼굴 음영
+
+  // ── 앞팔 + 글러브(펀치) ──
+  if (state.punch && !kicking) {
+    const f = fistPos(state.punch, prog);
+    // 팔(어깨→주먹 두꺼운 선)
+    thickLine(cx + 4, 42 + baseY, f.x, f.y, 4, C.skin);
+    // 글러브
+    px(f.x, f.y - 4, 9, 9, C.glove);
+    px(f.x, f.y + 2, 9, 3, C.gloveD);
+    px(f.x + 1, f.y - 3, 3, 3, "#ff8a8a"); // 하이라이트
+  } else if (!kicking) {
+    // 아이들 가드
+    px(cx + 6, 38 + baseY, 8, 8, C.glove);
+    px(cx + 6, 44 + baseY, 8, 2, C.gloveD);
+  }
+}
+
+function fistKick(p) {
+  const prog = p.t / p.def.dur, def = p.def;
+  let ex = prog < def.hitAt ? easeOut(prog / def.hitAt)
+                            : 1 - easeIn((prog - def.hitAt) / (1 - def.hitAt));
+  return { ex };
+}
+
+// 두꺼운 선(팔) — 픽셀 계단식
+function thickLine(x0, y0, x1, y1, thick, color) {
+  const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) | 0;
+  for (let i = 0; i <= steps; i++) {
+    const t = steps ? i / steps : 0;
+    px(x0 + (x1 - x0) * t - thick / 2, y0 + (y1 - y0) * t - thick / 2, thick, thick, color);
+  }
+}
+
+// ── 샌드백 그리기 (윗줄 고정 피벗에서 흔들림) ──
+function drawBag() {
+  const pivotX = 62, pivotY = 14;
+  const ang = state.bagAng;  // 라디안
+  ctx.save();
+  ctx.translate(pivotX, pivotY);
+  ctx.rotate(ang);
+  // 체인
+  px(-1, -8, 2, 8, C.chain);
+  px(-3, -8, 6, 3, C.chain);
+  // 백 본체
+  px(-9, 2, 18, 56, C.bag);
+  px(-9, 2, 5, 56, C.bagD);     // 왼쪽 음영
+  px(4, 2, 3, 56, C.bagL);      // 오른쪽 하이라이트
+  px(-9, 2, 18, 3, C.bagD);     // 상단 캡
+  px(-9, 52, 18, 4, C.bagD);    // 하단 캡
+  // 스트라이프
+  px(-9, 24, 18, 3, C.bagD);
+  ctx.restore();
+}
+
+// ── 임팩트 이펙트 ──
+function drawFx() {
+  for (const f of state.fx) {
+    const p = f.t / f.life;
+    if (p >= 1) continue;
+    const r = (2 + p * 10) * (0.6 + f.power * 0.5);
+    const cx = f.x + state.bagAng * 30, cy = f.y;
+    ctx.fillStyle = p < 0.4 ? C.fxHot : C.fx;
+    // 별표 8방향
+    for (let a = 0; a < 8; a++) {
+      const ang = (a / 8) * Math.PI * 2;
+      const len = r * (a % 2 ? 0.6 : 1);
+      const ex = cx + Math.cos(ang) * len, ey = cy + Math.sin(ang) * len;
+      const s = Math.max(1, 3 - p * 3);
+      px(ex - s / 2, ey - s / 2, s, s, ctx.fillStyle);
+    }
+  }
+}
+
+// ── 메인 루프 ──
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(48, now - last); last = now;
+  state.time += dt;
+
+  // 펀치 애니메이션 진행 (카운트는 클릭 즉시 처리되므로 여기선 시각효과만)
+  if (state.punch) {
+    state.punch.t += dt;
+    if (state.punch.t >= state.punch.def.dur) state.punch = null;
+  }
+
+  // 콤보 타임아웃
+  if (state.combo > 0 && state.time - state.lastHit > 1500) {
+    state.combo = 0; updateHud();
+  }
+
+  // 샌드백 스프링 물리
+  state.bagVel += -state.bagAng * 0.02;   // 복원력
+  state.bagVel *= 0.94;                    // 감쇠
+  state.bagAng += state.bagVel;
+
+  // 흔들림 감쇠
+  state.shake *= 0.85;
+  if (state.shake < 0.1) state.shake = 0;
+
+  // 이펙트 수명
+  for (const f of state.fx) f.t += dt;
+  state.fx = state.fx.filter(f => f.t < f.life);
+
+  // ── 렌더 ──
+  ctx.clearRect(0, 0, W, H);
+  // 바닥 그림자
+  ctx.fillStyle = "rgba(0,0,0,.25)";
+  ctx.fillRect(10, 82, 32, 4);
+  ctx.fillRect(52, 68, 22, 3);
+
+  drawBag();
+  drawBoxer();
+  drawFx();
+
+  // 버퍼 → 화면(흔들림 오프셋)
+  const sx = state.shake ? (Math.random() - .5) * state.shake : 0;
+  const sy = state.shake ? (Math.random() - .5) * state.shake : 0;
+  vctx.clearRect(0, 0, view.width, view.height);
+  vctx.drawImage(buf, sx * SCALE, sy * SCALE, view.width, view.height);
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
