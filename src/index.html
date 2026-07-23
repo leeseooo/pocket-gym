@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Punch Panel</title>
+<title>Pocket Gym</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
     width: 100%; height: 100%;
-    background: transparent;   /* 창 모서리 라운드가 보이도록 */
+    background: transparent;
     font-family: "Menlo", monospace;
     overflow: hidden;
     user-select: none;
@@ -24,7 +24,7 @@
     overflow: hidden;
     display: flex; flex-direction: column;
   }
-  #panel::before {   /* 은은한 링 조명 */
+  #panel::before {
     content: ""; position: absolute; inset: 0;
     background: radial-gradient(120% 80% at 50% 0%, rgba(255,255,255,.06), transparent 60%);
     pointer-events: none; z-index: 3;
@@ -33,23 +33,53 @@
   #bar {
     height: 26px; flex: 0 0 26px;
     display: flex; align-items: center; justify-content: space-between;
-    padding: 0 8px 0 12px; z-index: 5;
+    padding: 0 8px 0 10px; z-index: 5;
     text-shadow: 0 1px 0 rgba(0,0,0,.6);
   }
-  #combo { font-size: 12px; color: #ffd23f; font-weight: bold; letter-spacing: 1px; }
-  #combo .n { font-size: 16px; }
-  #combo.pop { animation: pop .18s ease-out; }
+  #left { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  #back {
+    width: 18px; height: 18px; border: none; border-radius: 4px;
+    background: rgba(255,255,255,.06); color: #b8b8c2;
+    font-size: 12px; line-height: 1; cursor: pointer; padding: 0;
+    display: none;
+  }
+  #back:hover { background: rgba(255,255,255,.16); color: #fff; }
+  #stat1 { font-size: 12px; color: #ffd23f; font-weight: bold; letter-spacing: 1px; white-space: nowrap; }
+  #stat1 .n { font-size: 16px; }
+  #stat1.title { color: #e8e8ec; letter-spacing: 2px; }
+  #stat1.pop { animation: pop .18s ease-out; }
   @keyframes pop { 0% { transform: scale(1.5); } 100% { transform: scale(1); } }
   #right { display: flex; align-items: center; gap: 8px; }
-  #total { font-size: 11px; color: #8a8a99; }
+  #stat2 { font-size: 11px; color: #8a8a99; white-space: nowrap; }
   #close {
     width: 16px; height: 16px; border: none; border-radius: 4px;
     background: rgba(255,255,255,.06); color: #9a9aa2;
     font-size: 12px; line-height: 1; cursor: pointer; padding: 0;
   }
   #close:hover { background: #e23b3b; color: #fff; }
-  /* 펀치 존 */
-  #stage { position: relative; flex: 1 1 auto; cursor: pointer; }
+
+  /* 메인 메뉴 */
+  #menu {
+    flex: 1 1 auto; display: flex; flex-direction: column;
+    gap: 10px; padding: 14px; justify-content: center; z-index: 2;
+  }
+  .card {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; border-radius: 10px;
+    background: #2c2c36; border: 1px solid rgba(255,255,255,.06);
+    cursor: pointer; transition: transform .08s, background .12s;
+  }
+  .card:hover { background: #34343f; transform: translateY(-1px); }
+  .card:active { transform: translateY(0); }
+  .card .emoji { font-size: 26px; }
+  .card .meta { display: flex; flex-direction: column; gap: 2px; }
+  .card .name { font-size: 14px; color: #fff; font-weight: bold; letter-spacing: .5px; }
+  .card .desc { font-size: 10px; color: #8a8a99; }
+  .card.soon { opacity: .55; }
+  .card.soon .name::after { content: " · 개발중"; color: #6a6a76; font-weight: normal; font-size: 9px; }
+
+  /* 게임 스테이지 */
+  #stage { position: relative; flex: 1 1 auto; cursor: pointer; display: none; }
   canvas {
     position: absolute; inset: 0;
     width: 100%; height: 100%;
@@ -58,28 +88,49 @@
   }
   #hint {
     position: absolute; bottom: 6px; left: 0; right: 0;
-    text-align: center; font-size: 9px; color: #4a4a54; z-index: 4;
-    pointer-events: none;
+    text-align: center; font-size: 9px; color: #6a6a76; z-index: 4;
+    pointer-events: none; text-shadow: 0 1px 0 rgba(0,0,0,.6);
   }
 </style>
 </head>
 <body>
   <div id="panel">
     <div id="bar" data-tauri-drag-region>
-      <div id="combo"><span class="n">0</span> COMBO</div>
+      <div id="left">
+        <button id="back" title="메뉴">◀</button>
+        <div id="stat1" class="title">POCKET GYM</div>
+      </div>
       <div id="right">
-        <div id="total">🥊 0</div>
+        <div id="stat2"></div>
         <button id="close" title="닫기">×</button>
       </div>
     </div>
+
+    <div id="menu">
+      <div class="card" data-game="combobag">
+        <div class="emoji">🥊</div>
+        <div class="meta">
+          <div class="name">Combo Bag</div>
+          <div class="desc">광클 해소 · 샌드백 콤보</div>
+        </div>
+      </div>
+      <div class="card" data-game="unbroken">
+        <div class="emoji">🏋️</div>
+        <div class="meta">
+          <div class="name">Unbroken</div>
+          <div class="desc">타이밍 집중 · 행파워 스내치</div>
+        </div>
+      </div>
+    </div>
+
     <div id="stage">
       <canvas id="game"></canvas>
-      <div id="hint">click to punch</div>
+      <div id="hint"></div>
     </div>
   </div>
 
 <script>
-// ── 버퍼(저해상도)에서 그리고 4배 확대해서 도트 감성 유지 ──
+// ═══════════════ 공용 렌더 인프라 ═══════════════
 const W = 96, H = 96, SCALE = 4;
 const view = document.getElementById("game");
 view.width = W * SCALE; view.height = H * SCALE;
@@ -90,223 +141,23 @@ const buf = document.createElement("canvas");
 buf.width = W; buf.height = H;
 const ctx = buf.getContext("2d");
 
-// ── 팔레트 ──
 const C = {
-  skin:   "#f0b878", skinD: "#c98a4e",
-  hair:   "#2b2b33",
-  trunk:  "#2e6cf0", trunkD: "#1c47a8",  // 파란 트렁크
-  glove:  "#e23b3b", gloveD: "#a11f1f",  // 빨간 글러브
-  boot:   "#e8e8ec", bootD: "#9a9aa2",
-  bag:    "#e23b3b", bagD: "#a11f1f", bagL: "#f57070", // 빨간 샌드백
-  chain:  "#6a6a76",
-  fx:     "#fff3b0", fxHot: "#ffffff",
+  skin:  "#f0b878", skinD: "#c98a4e", hair: "#2b2b33",
+  trunk: "#2e6cf0", trunkD: "#1c47a8",
+  glove: "#e23b3b", gloveD: "#a11f1f",
+  boot:  "#e8e8ec", bootD: "#9a9aa2",
+  bag:   "#e23b3b", bagD: "#a11f1f", bagL: "#f57070",
+  chain: "#6a6a76", fx: "#fff3b0", fxHot: "#ffffff",
+  // Unbroken
+  steel: "#c9ccd6", steelD: "#8a8d99",
+  plate: "#e23b3b", plateD: "#a11f1f",
+  singlet: "#20c08a", singletD: "#148a60",
+  platform: "#3a3a46", platformD: "#2a2a33",
+  zoneGood: "#4a7a3a", zonePerfect: "#8ce04a", cursor: "#ffffff",
+  good: "#8ce04a", perfect: "#ffd23f", bad: "#e2513b",
 };
 
-// ── 픽셀 사각형 헬퍼 ──
-function px(x, y, w, h, color) {
-  ctx.fillStyle = color;
-  ctx.fillRect(x|0, y|0, w, h);
-}
-
-// ── 상태 ──
-const state = {
-  punch: null,        // {type, t, hit, target}
-  combo: 0,
-  total: 0,
-  lastHit: -9999,
-  shake: 0,
-  bagVel: 0, bagAng: 0,  // 샌드백 흔들림(각도)
-  fx: [],             // 임팩트 이펙트
-  time: 0,
-};
-
-const PUNCHES = ["jab", "straight", "hook", "upper", "kick"];
-
-// 펀치 타입별 파라미터 (지속시간ms, 타격시점, 궤적)
-const PUNCH_DEF = {
-  jab:      { dur: 260, hitAt: .42, reach: 26, ty: 44, arc: "straight", power: .7 },
-  straight: { dur: 340, hitAt: .48, reach: 30, ty: 46, arc: "straight", power: 1.0 },
-  hook:     { dur: 380, hitAt: .50, reach: 24, ty: 42, arc: "hook",     power: 1.1 },
-  upper:    { dur: 360, hitAt: .52, reach: 22, ty: 40, arc: "upper",    power: 1.15 },
-  kick:     { dur: 460, hitAt: .55, reach: 30, ty: 60, arc: "kick",     power: 1.3 },
-};
-
-// ── 입력 ── (펀치는 스테이지 영역에서만, 상단 바는 드래그용)
-document.getElementById("stage").addEventListener("pointerdown", () => {
-  triggerPunch();
-});
-
-// 닫기 버튼 (Tauri 창 닫기)
-document.getElementById("close").addEventListener("click", (e) => {
-  e.stopPropagation();
-  if (window.__TAURI__) window.__TAURI__.window.getCurrentWindow().close();
-});
-
-function triggerPunch() {
-  // 진행 중이어도 새 펀치로 덮어써서 연타감 살림
-  const type = PUNCHES[(Math.random() * PUNCHES.length) | 0];
-  const def = PUNCH_DEF[type];
-  state.punch = { type, t: 0, def };
-  // ★ 카운트는 클릭 즉시 처리 → 광클해도 누락 0
-  onHit(def);
-}
-
-function onHit(def) {
-  state.total++;
-  // 콤보: 마지막 타격 후 1.5초 안이면 유지
-  if (state.time - state.lastHit < 1500) state.combo++;
-  else state.combo = 1;
-  state.lastHit = state.time;
-
-  state.shake = 6 * def.power;
-  state.bagVel += 0.055 * def.power;   // 샌드백 밀림
-  spawnFx(52, def.ty, def.power);
-  playHitSound(def.power, def.arc);
-  updateHud();
-}
-
-function spawnFx(x, y, power) {
-  state.fx.push({ x, y, t: 0, life: 260, power });
-}
-
-// ── HUD ──
-const comboEl = document.getElementById("combo");
-const totalEl = document.getElementById("total");
-function updateHud() {
-  comboEl.innerHTML = `<span class="n">${state.combo}</span> COMBO`;
-  totalEl.textContent = `🥊 ${state.total}`;
-  comboEl.classList.remove("pop"); void comboEl.offsetWidth; comboEl.classList.add("pop");
-}
-
-// ── 사운드 (WebAudio, 짧은 퍽/빡) ──
-let audio;
-function playHitSound(power, arc) {
-  try {
-    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-    const now = audio.currentTime;
-    // 저음 thud
-    const osc = audio.createOscillator();
-    const g = audio.createGain();
-    osc.type = "sine";
-    const baseFreq = arc === "kick" ? 90 : arc === "upper" ? 150 : 130;
-    osc.frequency.setValueAtTime(baseFreq, now);
-    osc.frequency.exponentialRampToValueAtTime(50, now + 0.12);
-    g.gain.setValueAtTime(0.001, now);
-    g.gain.exponentialRampToValueAtTime(0.5 * power, now + 0.008);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
-    osc.connect(g).connect(audio.destination);
-    osc.start(now); osc.stop(now + 0.18);
-    // 노이즈 '퍽'
-    const dur = 0.08;
-    const nb = audio.createBuffer(1, audio.sampleRate * dur, audio.sampleRate);
-    const d = nb.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
-    const ns = audio.createBufferSource(); ns.buffer = nb;
-    const ng = audio.createGain();
-    ng.gain.setValueAtTime(0.35 * power, now);
-    ng.gain.exponentialRampToValueAtTime(0.001, now + dur);
-    const hp = audio.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 900;
-    ns.connect(hp).connect(ng).connect(audio.destination);
-    ns.start(now); ns.stop(now + dur);
-  } catch (e) {}
-}
-
-// ── 이징 ──
-const easeOut = t => 1 - (1 - t) * (1 - t);
-const easeIn  = t => t * t;
-
-// ── 글러브 궤적 계산: 가드 위치 → 타격점 → 복귀 ──
-function fistPos(p, prog) {
-  const def = p.def;
-  // 가드(주먹 시작) 위치
-  const gx = 34, gy = 40;
-  // 타격점(샌드백 앞)
-  const hx = 34 + def.reach, hy = def.ty;
-  // 진행: 0~hitAt 뻗기, hitAt~1 복귀
-  let ex; // extension 0..1
-  if (prog < def.hitAt) ex = easeOut(prog / def.hitAt);
-  else ex = 1 - easeIn((prog - def.hitAt) / (1 - def.hitAt));
-
-  let x = gx + (hx - gx) * ex;
-  let y = gy + (hy - gy) * ex;
-
-  // 궤적별 곡선 가미
-  if (def.arc === "hook")  x += Math.sin(ex * Math.PI) * 6, y -= Math.sin(ex * Math.PI) * 8;
-  if (def.arc === "upper") y += Math.sin(ex * Math.PI) * 10;  // 아래로 갔다 위로
-  return { x, y, ex };
-}
-
-// ── 복서 그리기 (오른쪽=샌드백 방향을 봄) ──
-function drawBoxer() {
-  const prog = state.punch ? state.punch.t / state.punch.def.dur : 0;
-  const kicking = state.punch && state.punch.def.arc === "kick";
-  // 아이들 호흡 bob
-  const breathe = Math.sin(state.time / 500) * 1;
-  const baseY = 0 + (state.punch ? -Math.sin(prog * Math.PI) * 1.5 : breathe);
-
-  const cx = 22;          // 몸 중심 x
-  const feetY = 82;
-
-  // ── 뒷다리/앞다리 ──
-  if (kicking) {
-    const k = fistKick(state.punch);
-    // 뒤 지지다리
-    px(cx - 4, feetY - 16, 5, 16, C.trunkD);
-    px(cx - 5, feetY - 2, 8, 3, C.bootD);
-    // 앞 발차기 다리 (뻗음)
-    ctx.save();
-    px(cx + 2, 60 + baseY, k.ex * 22, 5, C.skin);       // 정강이
-    px(cx + 2 + k.ex * 22, 58 + baseY + k.ex * 2, 7, 6, C.boot); // 발
-    ctx.restore();
-  } else {
-    px(cx - 4, feetY - 16, 5, 16, C.trunkD);   // 뒷다리
-    px(cx + 2, feetY - 16, 5, 16, C.trunk);    // 앞다리
-    px(cx - 5, feetY - 2, 8, 3, C.bootD);      // 뒷발
-    px(cx + 1, feetY - 2, 8, 3, C.boot);       // 앞발
-  }
-
-  // ── 트렁크 ──
-  px(cx - 5, 52 + baseY, 14, 12, C.trunk);
-  px(cx - 5, 60 + baseY, 14, 3, C.trunkD);
-
-  // ── 몸통 ──
-  px(cx - 4, 38 + baseY, 12, 15, C.skin);
-  px(cx - 4, 38 + baseY, 3, 15, C.skinD);   // 음영
-
-  // ── 뒷팔(가드) ──
-  px(cx + 5, 40 + baseY, 5, 8, C.skin);
-  px(cx + 8, 36 + baseY, 7, 7, C.gloveD);   // 뒤 글러브(턱 옆)
-
-  // ── 머리 ──
-  px(cx - 2, 26 + baseY, 11, 13, C.skin);
-  px(cx - 2, 26 + baseY, 11, 4, C.hair);    // 머리카락
-  px(cx + 6, 32 + baseY, 2, 2, C.skinD);    // 눈
-  px(cx - 2, 32 + baseY, 2, 7, C.skinD);    // 얼굴 음영
-
-  // ── 앞팔 + 글러브(펀치) ──
-  if (state.punch && !kicking) {
-    const f = fistPos(state.punch, prog);
-    // 팔(어깨→주먹 두꺼운 선)
-    thickLine(cx + 4, 42 + baseY, f.x, f.y, 4, C.skin);
-    // 글러브
-    px(f.x, f.y - 4, 9, 9, C.glove);
-    px(f.x, f.y + 2, 9, 3, C.gloveD);
-    px(f.x + 1, f.y - 3, 3, 3, "#ff8a8a"); // 하이라이트
-  } else if (!kicking) {
-    // 아이들 가드
-    px(cx + 6, 38 + baseY, 8, 8, C.glove);
-    px(cx + 6, 44 + baseY, 8, 2, C.gloveD);
-  }
-}
-
-function fistKick(p) {
-  const prog = p.t / p.def.dur, def = p.def;
-  let ex = prog < def.hitAt ? easeOut(prog / def.hitAt)
-                            : 1 - easeIn((prog - def.hitAt) / (1 - def.hitAt));
-  return { ex };
-}
-
-// 두꺼운 선(팔) — 픽셀 계단식
+function px(x, y, w, h, color) { ctx.fillStyle = color; ctx.fillRect(x|0, y|0, w, h); }
 function thickLine(x0, y0, x1, y1, thick, color) {
   const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) | 0;
   for (let i = 0; i <= steps; i++) {
@@ -314,97 +165,456 @@ function thickLine(x0, y0, x1, y1, thick, color) {
     px(x0 + (x1 - x0) * t - thick / 2, y0 + (y1 - y0) * t - thick / 2, thick, thick, color);
   }
 }
+const easeOut = t => 1 - (1 - t) * (1 - t);
+const easeIn  = t => t * t;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
 
-// ── 샌드백 그리기 (윗줄 고정 피벗에서 흔들림) ──
-function drawBag() {
-  const pivotX = 62, pivotY = 14;
-  const ang = state.bagAng;  // 라디안
-  ctx.save();
-  ctx.translate(pivotX, pivotY);
-  ctx.rotate(ang);
-  // 체인
-  px(-1, -8, 2, 8, C.chain);
-  px(-3, -8, 6, 3, C.chain);
-  // 백 본체
-  px(-9, 2, 18, 56, C.bag);
-  px(-9, 2, 5, 56, C.bagD);     // 왼쪽 음영
-  px(4, 2, 3, 56, C.bagL);      // 오른쪽 하이라이트
-  px(-9, 2, 18, 3, C.bagD);     // 상단 캡
-  px(-9, 52, 18, 4, C.bagD);    // 하단 캡
-  // 스트라이프
-  px(-9, 24, 18, 3, C.bagD);
-  ctx.restore();
+// ── 오디오 ──
+let audio;
+function actx() { return audio = audio || new (window.AudioContext || window.webkitAudioContext)(); }
+function tone(freq, freq2, dur, vol, type = "sine") {
+  try {
+    const a = actx(), now = a.currentTime;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, now);
+    o.frequency.exponentialRampToValueAtTime(Math.max(20, freq2), now + dur);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(vol, now + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    o.connect(g).connect(a.destination);
+    o.start(now); o.stop(now + dur + 0.02);
+  } catch (e) {}
+}
+function noise(dur, vol, hp) {
+  try {
+    const a = actx(), now = a.currentTime;
+    const nb = a.createBuffer(1, a.sampleRate * dur, a.sampleRate);
+    const d = nb.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const ns = a.createBufferSource(); ns.buffer = nb;
+    const g = a.createGain();
+    g.gain.setValueAtTime(vol, now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    const f = a.createBiquadFilter(); f.type = "highpass"; f.frequency.value = hp || 800;
+    ns.connect(f).connect(g).connect(a.destination);
+    ns.start(now); ns.stop(now + dur);
+  } catch (e) {}
 }
 
-// ── 임팩트 이펙트 ──
-function drawFx() {
-  for (const f of state.fx) {
-    const p = f.t / f.life;
-    if (p >= 1) continue;
-    const r = (2 + p * 10) * (0.6 + f.power * 0.5);
-    const cx = f.x + state.bagAng * 30, cy = f.y;
-    ctx.fillStyle = p < 0.4 ? C.fxHot : C.fx;
-    // 별표 8방향
-    for (let a = 0; a < 8; a++) {
-      const ang = (a / 8) * Math.PI * 2;
-      const len = r * (a % 2 ? 0.6 : 1);
-      const ex = cx + Math.cos(ang) * len, ey = cy + Math.sin(ang) * len;
-      const s = Math.max(1, 3 - p * 3);
-      px(ex - s / 2, ey - s / 2, s, s, ctx.fillStyle);
+// ── HUD ──
+const stat1El = document.getElementById("stat1");
+const stat2El = document.getElementById("stat2");
+function setStat1(html, { pop = false, title = false } = {}) {
+  stat1El.innerHTML = html;
+  stat1El.classList.toggle("title", title);
+  if (pop) { stat1El.classList.remove("pop"); void stat1El.offsetWidth; stat1El.classList.add("pop"); }
+}
+function setStat2(text) { stat2El.textContent = text; }
+function setHint(text) { document.getElementById("hint").textContent = text || ""; }
+
+// ═══════════════ 게임 1: Combo Bag (복싱) ═══════════════
+function makeComboBag() {
+  const PUNCHES = ["jab", "straight", "hook", "upper", "kick"];
+  const DEF = {
+    jab:      { dur: 260, hitAt: .42, reach: 26, ty: 44, arc: "straight", power: .7 },
+    straight: { dur: 340, hitAt: .48, reach: 30, ty: 46, arc: "straight", power: 1.0 },
+    hook:     { dur: 380, hitAt: .50, reach: 24, ty: 42, arc: "hook",     power: 1.1 },
+    upper:    { dur: 360, hitAt: .52, reach: 22, ty: 40, arc: "upper",    power: 1.15 },
+    kick:     { dur: 460, hitAt: .55, reach: 30, ty: 60, arc: "kick",     power: 1.3 },
+  };
+  const s = { punch: null, combo: 0, total: 0, lastHit: -9999, bagVel: 0, bagAng: 0, fx: [], time: 0 };
+  let shake = 0;
+
+  function hud() {
+    setStat1(`<span class="n">${s.combo}</span> COMBO`, { pop: true });
+    setStat2(`🥊 ${s.total}`);
+  }
+  function playHit(power, arc) {
+    const base = arc === "kick" ? 90 : arc === "upper" ? 150 : 130;
+    tone(base, 50, 0.16, 0.5 * power);
+    noise(0.08, 0.35 * power, 900);
+  }
+  function onHit(def) {
+    s.total++;
+    if (s.time - s.lastHit < 1500) s.combo++; else s.combo = 1;
+    s.lastHit = s.time;
+    shake = 6 * def.power;
+    s.bagVel += 0.055 * def.power;
+    s.fx.push({ x: 52, y: def.ty, t: 0, life: 260, power: def.power });
+    playHit(def.power, def.arc);
+    hud();
+  }
+
+  function fistPos(p, prog) {
+    const def = p.def, gx = 34, gy = 40, hx = 34 + def.reach, hy = def.ty;
+    let ex = prog < def.hitAt ? easeOut(prog / def.hitAt) : 1 - easeIn((prog - def.hitAt) / (1 - def.hitAt));
+    let x = gx + (hx - gx) * ex, y = gy + (hy - gy) * ex;
+    if (def.arc === "hook")  { x += Math.sin(ex * Math.PI) * 6; y -= Math.sin(ex * Math.PI) * 8; }
+    if (def.arc === "upper") y += Math.sin(ex * Math.PI) * 10;
+    return { x, y, ex };
+  }
+  function drawBoxer() {
+    const prog = s.punch ? s.punch.t / s.punch.def.dur : 0;
+    const kicking = s.punch && s.punch.def.arc === "kick";
+    const breathe = Math.sin(s.time / 500) * 1;
+    const baseY = s.punch ? -Math.sin(prog * Math.PI) * 1.5 : breathe;
+    const cx = 22, feetY = 82;
+    if (kicking) {
+      const ex = prog < s.punch.def.hitAt ? easeOut(prog / s.punch.def.hitAt)
+                                          : 1 - easeIn((prog - s.punch.def.hitAt) / (1 - s.punch.def.hitAt));
+      px(cx - 4, feetY - 16, 5, 16, C.trunkD);
+      px(cx - 5, feetY - 2, 8, 3, C.bootD);
+      px(cx + 2, 60 + baseY, ex * 22, 5, C.skin);
+      px(cx + 2 + ex * 22, 58 + baseY + ex * 2, 7, 6, C.boot);
+    } else {
+      px(cx - 4, feetY - 16, 5, 16, C.trunkD);
+      px(cx + 2, feetY - 16, 5, 16, C.trunk);
+      px(cx - 5, feetY - 2, 8, 3, C.bootD);
+      px(cx + 1, feetY - 2, 8, 3, C.boot);
+    }
+    px(cx - 5, 52 + baseY, 14, 12, C.trunk);
+    px(cx - 5, 60 + baseY, 14, 3, C.trunkD);
+    px(cx - 4, 38 + baseY, 12, 15, C.skin);
+    px(cx - 4, 38 + baseY, 3, 15, C.skinD);
+    px(cx + 5, 40 + baseY, 5, 8, C.skin);
+    px(cx + 8, 36 + baseY, 7, 7, C.gloveD);
+    px(cx - 2, 26 + baseY, 11, 13, C.skin);
+    px(cx - 2, 26 + baseY, 11, 4, C.hair);
+    px(cx + 6, 32 + baseY, 2, 2, C.skinD);
+    px(cx - 2, 32 + baseY, 2, 7, C.skinD);
+    if (s.punch && !kicking) {
+      const f = fistPos(s.punch, prog);
+      thickLine(cx + 4, 42 + baseY, f.x, f.y, 4, C.skin);
+      px(f.x, f.y - 4, 9, 9, C.glove);
+      px(f.x, f.y + 2, 9, 3, C.gloveD);
+      px(f.x + 1, f.y - 3, 3, 3, "#ff8a8a");
+    } else if (!kicking) {
+      px(cx + 6, 38 + baseY, 8, 8, C.glove);
+      px(cx + 6, 44 + baseY, 8, 2, C.gloveD);
     }
   }
+  function drawBag() {
+    ctx.save(); ctx.translate(62, 14); ctx.rotate(s.bagAng);
+    px(-1, -8, 2, 8, C.chain); px(-3, -8, 6, 3, C.chain);
+    px(-9, 2, 18, 56, C.bag); px(-9, 2, 5, 56, C.bagD); px(4, 2, 3, 56, C.bagL);
+    px(-9, 2, 18, 3, C.bagD); px(-9, 52, 18, 4, C.bagD); px(-9, 24, 18, 3, C.bagD);
+    ctx.restore();
+  }
+  function drawFx() {
+    for (const f of s.fx) {
+      const p = f.t / f.life; if (p >= 1) continue;
+      const r = (2 + p * 10) * (0.6 + f.power * 0.5);
+      const cx = f.x + s.bagAng * 30, cy = f.y;
+      const col = p < 0.4 ? C.fxHot : C.fx;
+      for (let a = 0; a < 8; a++) {
+        const ang = (a / 8) * Math.PI * 2, len = r * (a % 2 ? 0.6 : 1);
+        const sz = Math.max(1, 3 - p * 3);
+        px(cx + Math.cos(ang) * len - sz / 2, cy + Math.sin(ang) * len - sz / 2, sz, sz, col);
+      }
+    }
+  }
+
+  return {
+    get shake() { return shake; },
+    enter() {
+      s.combo = 0; s.total = 0; s.lastHit = -9999; s.punch = null; s.fx = []; s.bagAng = 0; s.bagVel = 0;
+      setHint("click to punch");
+      hud();
+    },
+    onDown() {
+      const type = PUNCHES[(Math.random() * PUNCHES.length) | 0];
+      s.punch = { type, t: 0, def: DEF[type] };
+      onHit(DEF[type]);
+    },
+    onUp() {},
+    update(dt) {
+      s.time += dt;
+      if (s.punch) { s.punch.t += dt; if (s.punch.t >= s.punch.def.dur) s.punch = null; }
+      if (s.combo > 0 && s.time - s.lastHit > 1500) { s.combo = 0; hud(); }
+      s.bagVel += -s.bagAng * 0.02; s.bagVel *= 0.94; s.bagAng += s.bagVel;
+      shake *= 0.85; if (shake < 0.1) shake = 0;
+      for (const f of s.fx) f.t += dt;
+      s.fx = s.fx.filter(f => f.t < f.life);
+    },
+    render() {
+      ctx.fillStyle = "rgba(0,0,0,.25)";
+      ctx.fillRect(10, 82, 32, 4); ctx.fillRect(52, 68, 22, 3);
+      drawBag(); drawBoxer(); drawFx();
+    },
+  };
 }
 
-// ── 메인 루프 ──
-let last = performance.now();
+// ═══════════════ 게임 2: Unbroken (행파워 스내치) ═══════════════
+// 마우스 down = 바닥에서 1차 풀 → 허벅지(행)까지 상승, 계속 홀드
+// 홀드 중 타이밍 커서가 POP 존을 지날 때 mouse up = 고관절 폭발 → 머리 위 스내치
+// 성공하면 바닥으로 복귀 후 자동으로 다음 렙(언브로큰)
+function makeUnbroken() {
+  // 측면뷰 관절 포즈 (x,y) — floor/hang/extension/catch/stand
+  const POSE = {
+    setup: { ankle:[46,82], knee:[52,71], hip:[41,65], sho:[51,55], hand:[53,75], head:[52,47] },
+    hang:  { ankle:[46,82], knee:[49,70], hip:[45,62], sho:[46,48], hand:[49,63], head:[46,40] },
+    ext:   { ankle:[46,83], knee:[46,70], hip:[46,59], sho:[46,43], hand:[47,54], head:[46,35] },
+    catch: { ankle:[46,82], knee:[54,70], hip:[41,67], sho:[46,53], hand:[47,25], head:[47,45] },
+    stand: { ankle:[46,82], knee:[46,70], hip:[46,62], sho:[46,46], hand:[47,21], head:[47,38] },
+  };
+  const cur = JSON.parse(JSON.stringify(POSE.setup));
+  const s = {
+    phase: "ready",   // ready | pull | hang | pop | stand | descend | fail
+    t: 0,             // 현재 페이즈 경과 ms
+    reps: 0, best: 0, perfects: 0, attempts: 0,
+    hangDur: 900,     // 홀드 타이밍 창 길이 (렙 쌓일수록 짧아짐)
+    cursor: 0,        // 0..1 홀드 진행
+    holding: false,
+    flash: null,      // {text, color, t}
+    time: 0,
+  };
+  let shake = 0, target = POSE.setup, lerpSpeed = 0.18;
+
+  // POP 판정 존 (cursor 기준)
+  const GOOD_LO = 0.34, PERF_LO = 0.5, PERF_HI = 0.68, GOOD_HI = 0.82;
+
+  function hud() {
+    setStat1(`<span class="n">${s.reps}</span> UNBROKEN`, { pop: true });
+    const rate = s.attempts ? Math.round(s.perfects / s.attempts * 100) : 0;
+    setStat2(`◎ ${rate}%  ·  best ${s.best}`);
+  }
+  function setPose(name, speed) { target = POSE[name]; if (speed != null) lerpSpeed = speed; }
+  function flash(text, color) { s.flash = { text, color, t: 0 }; }
+
+  function toPhase(p) { s.phase = p; s.t = 0; }
+
+  function fail(reason) {
+    s.attempts++;
+    if (s.reps > s.best) s.best = s.reps;
+    s.reps = 0;
+    shake = 7;
+    flash(reason, C.bad);
+    tone(180, 60, 0.28, 0.5, "sawtooth");
+    noise(0.14, 0.4, 500);
+    toPhase("fail");
+    setPose("setup", 0.28);   // 바벨 드랍 (빠르게 바닥)
+    s.holding = false;
+    hud();
+  }
+  function success(quality) {
+    s.attempts++;
+    s.perfects += quality === "perfect" ? 1 : 0;
+    s.reps++;
+    if (s.reps > s.best) s.best = s.reps;
+    shake = quality === "perfect" ? 5 : 3;
+    flash(quality === "perfect" ? "PERFECT!" : "GOOD", quality === "perfect" ? C.perfect : C.good);
+    tone(quality === "perfect" ? 520 : 420, 900, 0.12, 0.4, "square"); // 바벨 '챙'
+    noise(0.06, 0.25, 1400);
+    // 난이도: 렙마다 창이 살짝 짧아짐 (집중도↑), 하한 480ms
+    s.hangDur = Math.max(480, 900 - s.reps * 22);
+    toPhase("pop");
+    setPose("ext", 0.5);      // 트리플 익스텐션 → catch → stand는 update에서 순차
+    hud();
+  }
+
+  function judgeRelease() {
+    const c = s.cursor;
+    if (c < GOOD_LO) return fail("EARLY");
+    if (c > GOOD_HI) return fail("LATE");
+    if (c >= PERF_LO && c <= PERF_HI) return success("perfect");
+    return success("good");
+  }
+
+  // ── 그리기 ──
+  function drawPlatform() {
+    px(14, 84, 68, 4, C.platform);
+    px(14, 88, 68, 3, C.platformD);
+    px(14, 84, 68, 1, "#4a4a56");
+  }
+  function drawLifter() {
+    const p = cur;
+    // 다리
+    thickLine(p.hip[0], p.hip[1], p.knee[0], p.knee[1], 5, C.singlet);
+    thickLine(p.knee[0], p.knee[1], p.ankle[0], p.ankle[1], 4, C.skin);
+    px(p.ankle[0] - 3, p.ankle[1], 8, 3, C.boot);       // 발
+    // 몸통(싱글렛)
+    thickLine(p.hip[0], p.hip[1], p.sho[0], p.sho[1], 7, C.singlet);
+    px(p.sho[0] - 3, p.sho[1] - 1, 6, 5, C.singletD);   // 어깨 음영
+    // 뒤쪽 다리 살짝 (입체감)
+    thickLine(p.hip[0] - 1, p.hip[1], p.knee[0] - 3, p.knee[1] + 1, 4, C.singletD);
+    // 팔 (어깨 → 손, 바를 잡음)
+    thickLine(p.sho[0], p.sho[1], p.hand[0], p.hand[1], 3, C.skin);
+    // 머리
+    px(p.head[0] - 3, p.head[1] - 3, 7, 7, C.skin);
+    px(p.head[0] - 3, p.head[1] - 3, 7, 2, C.hair);
+    // 바벨 (손 위치, 측면 = 원판)
+    drawBar(p.hand[0], p.hand[1]);
+  }
+  function drawBar(hx, hy) {
+    px(hx - 8, hy - 1, 18, 2, C.steelD);   // 바
+    // 원판(측면 디스크)
+    px(hx - 2, hy - 7, 5, 15, C.plate);
+    px(hx - 2, hy - 7, 2, 15, C.plateD);
+    px(hx + 2, hy - 7, 1, 15, C.plateD);
+    px(hx - 1, hy - 5, 3, 2, "#ff8a8a");   // 하이라이트
+  }
+  function drawMeter() {
+    if (s.phase !== "pull" && s.phase !== "hang") return;
+    const x0 = 20, x1 = 76, y = 91, w = x1 - x0;
+    px(x0, y, w, 3, "#1a1a20");
+    // good/perfect 존
+    px(x0 + w * GOOD_LO, y, w * (GOOD_HI - GOOD_LO), 3, C.zoneGood);
+    px(x0 + w * PERF_LO, y, w * (PERF_HI - PERF_LO), 3, C.zonePerfect);
+    // 커서
+    if (s.phase === "hang") {
+      const cxp = x0 + w * clamp(s.cursor, 0, 1);
+      px(cxp - 1, y - 2, 2, 7, C.cursor);
+    }
+  }
+  function drawFlash() {
+    if (!s.flash) return;
+    const p = s.flash.t / 700; if (p >= 1) { s.flash = null; return; }
+    const yoff = -p * 8;
+    ctx.globalAlpha = 1 - p;
+    // 도트 텍스트 대신 간단한 강조 바
+    ctx.fillStyle = s.flash.color;
+    ctx.font = "bold 11px Menlo, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(s.flash.text, 48, 20 + yoff);
+    ctx.globalAlpha = 1;
+  }
+
+  function hint() {
+    switch (s.phase) {
+      case "ready": return "click & HOLD to pull";
+      case "pull":  return "hold...";
+      case "hang":  return "release on the bright zone!";
+      default: return "";
+    }
+  }
+
+  return {
+    get shake() { return shake; },
+    enter() {
+      s.phase = "ready"; s.t = 0; s.reps = 0; s.best = 0; s.perfects = 0; s.attempts = 0;
+      s.hangDur = 900; s.cursor = 0; s.holding = false; s.flash = null;
+      Object.assign(cur, JSON.parse(JSON.stringify(POSE.setup)));
+      target = POSE.setup; lerpSpeed = 0.18;
+      setHint("click & HOLD to pull");
+      hud();
+    },
+    onDown() {
+      if (s.phase === "ready") {
+        s.holding = true;
+        toPhase("pull");
+        setPose("hang", 0.16);   // 바닥 → 행 상승
+        tone(150, 90, 0.1, 0.25);     // 바 들리는 소리
+        noise(0.05, 0.15, 600);
+      }
+    },
+    onUp() {
+      s.holding = false;
+      if (s.phase === "pull") return fail("EARLY");   // 행 도달 전에 놓음
+      if (s.phase === "hang") return judgeRelease();
+    },
+    update(dt) {
+      s.time += dt; s.t += dt;
+      if (s.flash) s.flash.t += dt;
+      shake *= 0.85; if (shake < 0.1) shake = 0;
+
+      // 포즈 부드럽게 보간
+      const k = 1 - Math.pow(1 - lerpSpeed, dt / 16.67);
+      for (const j of ["ankle","knee","hip","sho","hand","head"]) {
+        cur[j][0] = lerp(cur[j][0], target[j][0], k);
+        cur[j][1] = lerp(cur[j][1], target[j][1], k);
+      }
+
+      // 페이즈 진행
+      if (s.phase === "pull") {
+        // 행 위치에 충분히 도달하면 hang 으로
+        if (s.t > 260) { toPhase("hang"); s.cursor = 0; }
+      } else if (s.phase === "hang") {
+        s.cursor += dt / s.hangDur;
+        if (s.cursor >= 1) fail("LATE");   // 너무 오래 홀드 → 놓침
+      } else if (s.phase === "pop") {
+        // ext(120ms) → catch(그 후) → stand
+        if (s.t > 110 && target === POSE.ext) { setPose("catch", 0.4); shake = Math.max(shake, 4); noise(0.05,0.2,1000); }
+        if (s.t > 300 && target === POSE.catch) setPose("stand", 0.22);
+        if (s.t > 620) { toPhase("stand"); }
+      } else if (s.phase === "stand") {
+        // 잠깐 락아웃 후 하강
+        if (s.t > 260) { toPhase("descend"); setPose("setup", 0.16); }
+      } else if (s.phase === "descend") {
+        if (s.t > 360) { toPhase("ready"); }   // 언브로큰: 바로 다음 렙 대기
+      } else if (s.phase === "fail") {
+        if (s.t > 500) { toPhase("ready"); }
+      }
+      setHint(hint());
+    },
+    render() {
+      drawPlatform();
+      drawLifter();
+      drawMeter();
+      drawFlash();
+    },
+  };
+}
+
+// ═══════════════ 라우터 ═══════════════
+const menuEl = document.getElementById("menu");
+const stageEl = document.getElementById("stage");
+const backEl = document.getElementById("back");
+const GAMES = { combobag: makeComboBag(), unbroken: makeUnbroken() };
+let active = null;
+
+function openGame(id) {
+  active = GAMES[id];
+  menuEl.style.display = "none";
+  stageEl.style.display = "block";
+  backEl.style.display = "block";
+  try { actx().resume(); } catch (e) {}
+  active.enter();
+}
+function goMenu() {
+  active = null;
+  stageEl.style.display = "none";
+  menuEl.style.display = "flex";
+  backEl.style.display = "none";
+  setHint("");
+  setStat1("POCKET GYM", { title: true });
+  setStat2("");
+}
+
+document.querySelectorAll(".card").forEach(card => {
+  card.addEventListener("click", () => openGame(card.dataset.game));
+});
+backEl.addEventListener("click", (e) => { e.stopPropagation(); goMenu(); });
+document.getElementById("close").addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (window.__TAURI__) window.__TAURI__.window.getCurrentWindow().close();
+});
+
+// 입력: 스테이지에서만. 홀드 게임을 위해 mouseup 은 window 에서도 받음
+stageEl.addEventListener("pointerdown", (e) => { if (active) active.onDown(e); });
+window.addEventListener("pointerup", (e) => { if (active) active.onUp(e); });
+
+// ═══════════════ 메인 루프 ═══════════════
+let lastT = performance.now();
 function loop(now) {
-  const dt = Math.min(48, now - last); last = now;
-  state.time += dt;
-
-  // 펀치 애니메이션 진행 (카운트는 클릭 즉시 처리되므로 여기선 시각효과만)
-  if (state.punch) {
-    state.punch.t += dt;
-    if (state.punch.t >= state.punch.def.dur) state.punch = null;
-  }
-
-  // 콤보 타임아웃
-  if (state.combo > 0 && state.time - state.lastHit > 1500) {
-    state.combo = 0; updateHud();
-  }
-
-  // 샌드백 스프링 물리
-  state.bagVel += -state.bagAng * 0.02;   // 복원력
-  state.bagVel *= 0.94;                    // 감쇠
-  state.bagAng += state.bagVel;
-
-  // 흔들림 감쇠
-  state.shake *= 0.85;
-  if (state.shake < 0.1) state.shake = 0;
-
-  // 이펙트 수명
-  for (const f of state.fx) f.t += dt;
-  state.fx = state.fx.filter(f => f.t < f.life);
-
-  // ── 렌더 ──
+  const dt = Math.min(48, now - lastT); lastT = now;
   ctx.clearRect(0, 0, W, H);
-  // 바닥 그림자
-  ctx.fillStyle = "rgba(0,0,0,.25)";
-  ctx.fillRect(10, 82, 32, 4);
-  ctx.fillRect(52, 68, 22, 3);
-
-  drawBag();
-  drawBoxer();
-  drawFx();
-
-  // 버퍼 → 화면(흔들림 오프셋)
-  const sx = state.shake ? (Math.random() - .5) * state.shake : 0;
-  const sy = state.shake ? (Math.random() - .5) * state.shake : 0;
-  vctx.clearRect(0, 0, view.width, view.height);
-  vctx.drawImage(buf, sx * SCALE, sy * SCALE, view.width, view.height);
-
+  if (active) {
+    active.update(dt);
+    active.render();
+    const sh = active.shake || 0;
+    const sx = sh ? (Math.random() - .5) * sh : 0;
+    const sy = sh ? (Math.random() - .5) * sh : 0;
+    vctx.clearRect(0, 0, view.width, view.height);
+    vctx.drawImage(buf, sx * SCALE, sy * SCALE, view.width, view.height);
+  }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+
+// 시작은 메뉴
+goMenu();
 </script>
 </body>
 </html>
