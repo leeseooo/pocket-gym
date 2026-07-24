@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Pocket Gym",
+  "productName": "Frog Gym",
   "version": "0.1.0",
   "identifier": "com.zero.pocketgym",
   "build": {
@@ -11,7 +11,7 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "Pocket Gym",
+        "title": "Frog Gym",
         "label": "main",
         "width": 300,
         "height": 320,
