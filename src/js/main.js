@@ -3,7 +3,7 @@
 const menuEl = document.getElementById("menu");
 const stageEl = document.getElementById("stage");
 const backEl = document.getElementById("back");
-const GAMES = { combobag: makeComboBag(), unbroken: makeUnbroken(), rings: makeRingMuscleUp() };
+const GAMES = { combobag: makeComboBag(), unbroken: makeUnbroken(), rings: makeRingMuscleUp(), dash: makeDash() };
 let active = null;
 
 function openGame(id) {
@@ -28,6 +28,9 @@ document.getElementById("close").addEventListener("click", (e) => {
 stageEl.addEventListener("pointerdown", (e) => { if (active) active.onDown(e); });
 window.addEventListener("pointermove", (e) => { if (active) active.onMove(e); });
 window.addEventListener("pointerup", (e) => { if (active) active.onUp(e); });
+// 키보드 (Dash 등 키 게임용). 게임이 onKeyDown/Up을 구현할 때만 전달.
+window.addEventListener("keydown", (e) => { if (active && active.onKeyDown) active.onKeyDown(e); });
+window.addEventListener("keyup", (e) => { if (active && active.onKeyUp) active.onKeyUp(e); });
 
 let lastT = performance.now();
 function loop(now) {
