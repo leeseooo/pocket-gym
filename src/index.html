@@ -56,8 +56,9 @@
   /* 메인 메뉴 — 마리오풍 볼드 2x2 */
   #menu {
     flex: 1 1 auto; display: grid;
-    grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
-    gap: 8px; padding: 9px; z-index: 2;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 8px; padding: 9px; z-index: 2; min-height: 0;
   }
   .card {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
@@ -68,7 +69,7 @@
   .card:hover { filter: brightness(1.08); }
   .card:active { transform: translateY(4px); box-shadow: 0 1px 0 rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.28); }
   .card .emoji { font-size: 32px; filter: drop-shadow(0 2px 0 rgba(0,0,0,.35)); }
-  .card .name { font-size: 12px; color: #fff; font-weight: 900; letter-spacing: 1px; text-shadow: 1.5px 1.5px 0 rgba(0,0,0,.55); }
+  .card .name { font-size: 12px; color: #fff; font-weight: 900; letter-spacing: 1px; text-align: center; text-shadow: 1.5px 1.5px 0 rgba(0,0,0,.55); }
   .card[data-game="combobag"] { background: #e52521; }
   .card[data-game="unbroken"] { background: #049cd8; }
   .card[data-game="rings"] { background: #43b047; }
